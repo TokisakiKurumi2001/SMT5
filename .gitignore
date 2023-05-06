@@ -191,3 +191,4 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python,linux
 data/*.csv
 data/translate_snli/*.csv
+smt5_ckpt/

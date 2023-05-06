@@ -2,76 +2,32 @@ import torch
 import torch.nn as nn
 import pytorch_lightning as pl
 from typing import List
-from PAD import PADModel
+from SMT5 import SMT5CLModel, get_lr_linear_decay
 import evaluate
 import numpy as np
 import re
-from transformers import get_constant_schedule_with_warmup
+from transformers.optimization import Adafactor
 
 class LitPAD(pl.LightningModule):
-    def __init__(self, ckpt: str, lr: float):
+    def __init__(self, ckpt: str, lr: float, num_keep_steps: int, num_training_steps: int):
         super(LitPAD, self).__init__()
-        self.model = PADModel(ckpt)
-        self.mlm_vocab_size = self.model.mapper.config.mlm_vocab_size
-        self.cls_class_num = self.model.mapper.config.cls_out
-        self.mlm_loss = nn.CrossEntropyLoss()
-        self.cls_loss = nn.CrossEntropyLoss()
+        self.model = SMT5CLModel(ckpt)
         self.lr = lr
-        self.cls_valid_metric = evaluate.load("metrics/accuracy.py")
-        self.cls_test_metric = evaluate.load("metrics/accuracy.py")
+        self.num_keep_steps = num_keep_steps
+        self.num_training_steps = num_training_steps
         self.save_hyperparameters()
 
     def export_model(self, path):
         self.model.save_pretrained(path)
 
     def training_step(self, batch, batch_idx):
-        mlm_labels = batch.pop('decoder_labels')
-        cls_labels = batch.pop('cls_label')
-        m, c = self.model(batch)
+        l = self.model(batch)
 
-        mlm_loss = self.mlm_loss(m.view(-1, self.mlm_vocab_size), mlm_labels.view(-1).long())
-        mlm_loss = torch.nan_to_num(mlm_loss)
-        cls_loss = self.cls_loss(c.view(-1, self.cls_class_num), cls_labels.view(-1).long())
-
-        loss = mlm_loss + cls_loss
-        self.log("train/mlm_loss", mlm_loss, sync_dist=True)
-        self.log("train/cls_loss", cls_loss, sync_dist=True)
+        loss = l.sum()
         self.log("train/loss", loss, sync_dist=True)
         return loss
-
-    def validation_step(self, batch, batch_idx):
-        batch.pop('decoder_labels')
-        cls_labels = batch.pop('cls_label')
-        _, c = self.model(batch)
-
-        loss = self.cls_loss(c.view(-1, self.cls_class_num), cls_labels.view(-1).long())
-
-        self.log("valid/loss", loss, sync_dist=True)
-
-        cls_preds = c.argmax(dim=-1)
-        self.cls_valid_metric.add_batch(predictions=cls_preds, references=cls_labels)
-
-    def validation_epoch_end(self, outputs):
-        results = self.cls_valid_metric.compute()
-        self.log('valid/accuracy', results['accuracy'], on_epoch=True, on_step=False, sync_dist=True)
-
-    def test_step(self, batch, batch_idx):
-        batch.pop('decoder_labels')
-        cls_labels = batch.pop('cls_label')
-        _, c = self.model(batch)
-
-        loss = self.cls_loss(c.view(-1, self.cls_class_num), cls_labels.view(-1).long())
-
-        self.log("test/loss", loss, sync_dist=True)
-
-        cls_preds = c.argmax(dim=-1)
-        self.cls_test_metric.add_batch(predictions=cls_preds, references=cls_labels)
-
-    def test_epoch_end(self, outputs):
-        results = self.cls_test_metric.compute()
-        self.log('test/accuracy', results['accuracy'], on_epoch=True, on_step=False, sync_dist=True)
         
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        lr_scheduler = get_constant_schedule_with_warmup(optimizer, 1500)
+        optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=1e-3)
+        lr_scheduler = get_lr_linear_decay(optimizer, num_keep_steps, num_training_steps)
         return [optimizer], [lr_scheduler]
