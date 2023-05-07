@@ -8,13 +8,17 @@ import numpy as np
 import re
 from transformers.optimization import Adafactor
 
-class LitPAD(pl.LightningModule):
-    def __init__(self, ckpt: str, lr: float, num_keep_steps: int, num_training_steps: int):
-        super(LitPAD, self).__init__()
-        self.model = SMT5CLModel(ckpt)
+class LitSMT5(pl.LightningModule):
+    def __init__(
+        self, ckpt: str, lr: float, num_keep_steps: int, num_training_steps: int, name: str,
+        mapper_ckpt: str = '', mode: str = 'train',
+    ):
+        super(LitSMT5, self).__init__()
+        self.model = SMT5CLModel(ckpt, mapper_ckpt, mode)
         self.lr = lr
         self.num_keep_steps = num_keep_steps
         self.num_training_steps = num_training_steps
+        self.name = name
         self.save_hyperparameters()
 
     def export_model(self, path):
@@ -24,10 +28,10 @@ class LitPAD(pl.LightningModule):
         l = self.model(batch)
 
         loss = l.sum()
-        self.log("train/loss", loss, sync_dist=True)
+        self.log(f"{self.name}_train/loss", loss, sync_dist=True)
         return loss
         
     def configure_optimizers(self):
-        optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=1e-3)
+        optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=self.lr)
         lr_scheduler = get_lr_linear_decay(optimizer, num_keep_steps, num_training_steps)
         return [optimizer], [lr_scheduler]

@@ -66,7 +66,7 @@ class SMT5CLModel(nn.Module):
 
     def forward(self, inputs):
         neg_out = None
-        if inputs['query_input_ids'] is not None:
+        if 'query_input_ids' in inputs:
             query_outputs = self.encoder(
                 input_ids=inputs['query_input_ids'],
                 attention_mask=inputs['query_attention_mask'],
@@ -80,7 +80,7 @@ class SMT5CLModel(nn.Module):
                 return_dict=True,
             )
             pos_out = self.mapper(answer_outputs.last_hidden_state, inputs['answer_attention_mask'])
-        elif inputs['anchor_input_ids'] is not None:
+        elif 'anchor_input_ids' in inputs:
             anchor_outputs = self.encoder(
                 input_ids=inputs['anchor_input_ids'],
                 attention_mask=inputs['anchor_attention_mask'],
