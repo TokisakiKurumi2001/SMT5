@@ -114,7 +114,6 @@ class SMT5CLModel(nn.Module):
             sim_neg = torch.exp(torch.inner(anchor_out, neg_out) / self.mapper.config.temp).sum(dim=-1, keepdim=True)
             ib_neg = ib_neg + sim_neg
 
-        breakpoint()
         loss = - torch.log(self_pos / ib_neg)
         return loss
 
