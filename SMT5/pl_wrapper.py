@@ -32,6 +32,11 @@ class LitSMT5(pl.LightningModule):
         return loss
         
     def configure_optimizers(self):
-        optimizer = Adafactor(model.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=self.lr)
-        lr_scheduler = get_lr_linear_decay(optimizer, num_keep_steps, num_training_steps)
+        optimizer = Adafactor(self.parameters(), scale_parameter=False, relative_step=False, warmup_init=False, lr=self.lr)
+        lr_scheduler = {
+            'scheduler': get_lr_linear_decay(optimizer, self.num_keep_steps, self.num_training_steps),
+            'interval': 'step',
+            'frequency': 1,
+            'name': 'lr',
+        }
         return [optimizer], [lr_scheduler]

@@ -7,7 +7,7 @@ class SMT5Config(PretrainedConfig):
         self,
         d_out=1024,
         d_proj=768,
-        temp=0.01,
+        temp=0.05,
         **kwargs,
     ):
         self.d_out = d_out

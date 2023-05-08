@@ -52,7 +52,6 @@ class SMT5CLModel(nn.Module):
             self.mapper = SMT5MapperModel.from_pretrained(mapper_ckpt)
 
         self.encoder = MT5EncoderModel.from_pretrained(ckpt)
-        self.device = self.encoder.device
 
     def save_pretrained(self, path):
         self.mapper.save_pretrained(path + "/mapper")
@@ -102,14 +101,15 @@ class SMT5CLModel(nn.Module):
             )
             neg_out = self.mapper(neg_outputs.last_hidden_state, inputs['neg_attention_mask'])
         
+        device = anchor_out.device 
         bz, _ = anchor_out.shape
-        sim = torch.exp(torch.inner(anchor_out, pos_out) / self.mapper.config.temp)
-        cross_lingual_idx = self._cross_equal(inputs['idx'], inputs['idx'])
-        self_pos_mask = torch.zeros(bz, bz).fill_diagonal_(1).to(self.device)
-        in_batch_neg_mask = torch.ones(bz, bz).to(self.device) - cross_lingual_idx
+        sim = torch.exp(torch.div(torch.inner(anchor_out, pos_out), self.mapper.config.temp))
+        cross_lingual_idx = self._cross_equal(inputs['idx'], inputs['idx']).to(device)
+        self_pos_mask = torch.zeros(bz, bz).fill_diagonal_(1).to(device)
+        in_batch_neg_mask = torch.ones(bz, bz).to(device) - cross_lingual_idx
         self_pos = (sim * self_pos_mask).sum(dim=-1, keepdim=True)
         ib_neg = (sim * in_batch_neg_mask).sum(dim=-1, keepdim=True)
-
+        
         if neg_out is not None:
             sim_neg = torch.exp(torch.inner(anchor_out, neg_out) / self.mapper.config.temp).sum(dim=-1, keepdim=True)
             ib_neg = ib_neg + sim_neg
