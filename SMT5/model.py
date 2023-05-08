@@ -106,7 +106,7 @@ class SMT5CLModel(nn.Module):
         sim = torch.exp(torch.div(torch.inner(anchor_out, pos_out), self.mapper.config.temp))
         cross_lingual_idx = self._cross_equal(inputs['idx'], inputs['idx']).to(device)
         self_pos_mask = torch.zeros(bz, bz).fill_diagonal_(1).to(device)
-        in_batch_neg_mask = torch.ones(bz, bz).to(device) - cross_lingual_idx
+        in_batch_neg_mask = torch.ones(bz, bz).to(device) - (cross_lingual_idx - self_pos_mask)
         self_pos = (sim * self_pos_mask).sum(dim=-1, keepdim=True)
         ib_neg = (sim * in_batch_neg_mask).sum(dim=-1, keepdim=True)
         
@@ -114,6 +114,7 @@ class SMT5CLModel(nn.Module):
             sim_neg = torch.exp(torch.inner(anchor_out, neg_out) / self.mapper.config.temp).sum(dim=-1, keepdim=True)
             ib_neg = ib_neg + sim_neg
 
+        breakpoint()
         loss = - torch.log(self_pos / ib_neg)
         return loss
 
